@@ -8,6 +8,7 @@ mkdir -p "$REPORT_DIR"
 MD="$REPORT_DIR/IOC.md"
 CSV="$REPORT_DIR/IOC.csv"
 JSON="$REPORT_DIR/IOC.json"
+JSON_TMP="$REPORT_DIR/IOC.tsv"
 
 APP="${APP:-$(find . -name "*.app" -type d | head -n 1)}"
 
@@ -22,20 +23,9 @@ echo "" >> "$MD"
 ##############################################
 
 echo "Type,Value,Source" > "$CSV"
+: > "$JSON_TMP"
 
 ##############################################
-
-cat > "$JSON" <<EOF
-{
-  "generated":"$(date)",
-  "ioc":[
-EOF
-
-##############################################
-
-json_escape(){
-python3 -c 'import json, sys; print(json.dumps(sys.stdin.read()), end="")'
-}
 
 json_add(){
 
@@ -43,24 +33,11 @@ TYPE="$1"
 VALUE="$2"
 SRC="$3"
 
-if grep -q '"type":' "$JSON"
-then
-    echo "," >> "$JSON"
-fi
-
-TYPE_JSON=$(printf "%s" "$TYPE" | json_escape)
-VALUE_JSON=$(printf "%s" "$VALUE" | json_escape)
-SRC_JSON=$(printf "%s" "$SRC" | json_escape)
-
-cat >> "$JSON" <<EOF
-{
-"type":$TYPE_JSON,
-"value":$VALUE_JSON,
-"source":$SRC_JSON
-}
-EOF
-
-echo "$TYPE,$VALUE,$SRC" >> "$CSV"
+printf '%s\t%s\t%s\n' "$TYPE" "$VALUE" "$SRC" >> "$JSON_TMP"
+printf '"%s","%s","%s"\n' \
+    "$(printf "%s" "$TYPE" | sed 's/"/""/g')" \
+    "$(printf "%s" "$VALUE" | sed 's/"/""/g')" \
+    "$(printf "%s" "$SRC" | sed 's/"/""/g')" >> "$CSV"
 
 }
 
@@ -568,11 +545,30 @@ done
 # JSON END
 ##############################################
 
-cat >> "$JSON" <<EOF
+python3 - "$JSON_TMP" "$JSON" <<'PY'
+import csv
+import json
+import sys
+from datetime import datetime
 
-]
-}
-EOF
+tsv_path, json_path = sys.argv[1], sys.argv[2]
+items = []
+
+with open(tsv_path, newline="", encoding="utf-8", errors="replace") as f:
+    for row in csv.reader(f, delimiter="\t"):
+        if len(row) != 3:
+            continue
+        items.append({"type": row[0], "value": row[1], "source": row[2]})
+
+with open(json_path, "w", encoding="utf-8") as f:
+    json.dump(
+        {"generated": datetime.utcnow().isoformat(timespec="seconds") + "Z", "ioc": items},
+        f,
+        ensure_ascii=False,
+        indent=2,
+    )
+    f.write("\n")
+PY
 
 ##############################################
 # Summary

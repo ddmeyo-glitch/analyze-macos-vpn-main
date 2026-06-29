@@ -75,6 +75,13 @@ fi
 section "Dangerous APIs"
 
 FOUND=0
+SCAN_REPORTS=()
+for f in Security.md MachO.md NetworkExtension.md Go.md; do
+    if [ -f "$REPORT_DIR/$f" ]; then
+        SCAN_REPORTS+=("$REPORT_DIR/$f")
+    fi
+done
+
 for WORD in \
 NSTask \
 system \
@@ -88,7 +95,7 @@ ptrace \
 task_for_pid \
 launchctl
 do
-    if grep -Riq "$WORD" "$REPORT_DIR" 2>/dev/null
+    if [ "${#SCAN_REPORTS[@]}" -gt 0 ] && grep -iq "$WORD" "${SCAN_REPORTS[@]}" 2>/dev/null
     then
         status_warn "$WORD detected"
         FOUND=1
@@ -113,22 +120,28 @@ fi
 
 section "Entitlements"
 
-grep -R "com.apple.developer" "$REPORT_DIR" 2>/dev/null | sort -u >> "$OUT" || true
+for f in CodeSign.md MachO.md NetworkExtension.md; do
+    [ -f "$REPORT_DIR/$f" ] || continue
+    grep "com.apple.developer" "$REPORT_DIR/$f" 2>/dev/null || true
+done | sort -u >> "$OUT"
 
 section "Embedded URLs"
 
-grep -RhoE "https?://[^ ]+" "$REPORT_DIR" 2>/dev/null | sort -u >> "$OUT" || true
+for f in Security.md IOC.md Go.md NetworkExtension.md; do
+    [ -f "$REPORT_DIR/$f" ] || continue
+    grep -hoE 'https?://[^"'"'"' <>]+' "$REPORT_DIR/$f" 2>/dev/null || true
+done | sort -u >> "$OUT"
 
 section "Risk Assessment"
 
 RISK="LOW"
 
-if grep -Riq "SMJobBless" "$REPORT_DIR" 2>/dev/null
+if [ "${#SCAN_REPORTS[@]}" -gt 0 ] && grep -iq "SMJobBless" "${SCAN_REPORTS[@]}" 2>/dev/null
 then
     RISK="MEDIUM"
 fi
 
-if grep -Riq "AuthorizationExecuteWithPrivileges" "$REPORT_DIR" 2>/dev/null
+if [ "${#SCAN_REPORTS[@]}" -gt 0 ] && grep -iq "AuthorizationExecuteWithPrivileges" "${SCAN_REPORTS[@]}" 2>/dev/null
 then
     RISK="HIGH"
 fi

@@ -58,11 +58,16 @@ CFBundleShortVersionString 2>/dev/null >> "$OUT" || true
 # Executable
 #########################################################################
 
-EXECUTABLE=$(defaults read "$EXT/Contents/Info" CFBundleExecutable 2>/dev/null || true)
+EXECUTABLE=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$EXT/Contents/Info.plist" 2>/dev/null || true)
 BIN="$EXT/Contents/MacOS/$EXECUTABLE"
 
 echo "" >> "$OUT"
 echo "Executable : $BIN" >> "$OUT"
+
+if [ -z "$EXECUTABLE" ] || [ ! -f "$BIN" ]; then
+    echo "Executable not found." >> "$OUT"
+    exit 0
+fi
 
 #########################################################################
 # Mach-O
