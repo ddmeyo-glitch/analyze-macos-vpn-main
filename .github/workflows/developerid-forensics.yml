@@ -2,6 +2,11 @@ name: DeveloperID Forensics
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/developerid-forensics.yml"
+      - "scripts/**"
+      - "*.zip"
 
 jobs:
   analyze:
