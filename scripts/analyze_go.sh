@@ -27,7 +27,7 @@ has_go_metadata() {
 }
 
 has_go_or_fyne_strings() {
-    strings "$1" 2>/dev/null | grep -Eiq "(^go1\.[0-9]+|runtime\.buildVersion|github.com/fyne-io|fyne\.io/fyne|FYNE_)"
+    (strings "$1" 2>/dev/null || true) | grep -Eiq "(^go1\.[0-9]+|runtime\.buildVersion|github.com/fyne-io|fyne\.io/fyne|FYNE_)"
 }
 
 while IFS= read -r f
@@ -94,27 +94,27 @@ fi
 echo "" >> "$OUT"
 echo "## Runtime Version" >> "$OUT"
 
-strings "$BIN" | grep -E "^go1\.[0-9]+" | sort -u >> "$OUT" || true
+(strings "$BIN" 2>/dev/null || true) | grep -E "^go1\.[0-9]+" | sort -u >> "$OUT" || true
 
 echo "" >> "$OUT"
 echo "## Fyne" >> "$OUT"
 
-strings "$BIN" | grep -Ei "fyne|github.com/fyne-io|fyne\.io/fyne|FYNE_" | sort -u >> "$OUT" || true
+(strings "$BIN" 2>/dev/null || true) | grep -Ei "fyne|github.com/fyne-io|fyne\.io/fyne|FYNE_" | sort -u >> "$OUT" || true
 
 echo "" >> "$OUT"
 echo "## Modules" >> "$OUT"
 
-strings "$BIN" | grep -E "github.com/|fyne\.io/" | sort -u >> "$OUT" || true
+(strings "$BIN" 2>/dev/null || true) | grep -E "github.com/|fyne\.io/" | sort -u >> "$OUT" || true
 
 echo "" >> "$OUT"
 echo "## golang.org Modules" >> "$OUT"
 
-strings "$BIN" | grep "golang.org/" | sort -u >> "$OUT" || true
+(strings "$BIN" 2>/dev/null || true) | grep "golang.org/" | sort -u >> "$OUT" || true
 
 echo "" >> "$OUT"
 echo "## CGO" >> "$OUT"
 
-strings "$BIN" | grep -Ei "cgo|libobjc|libSystem|libc\\+\\+" | sort -u >> "$OUT" || true
+(strings "$BIN" 2>/dev/null || true) | grep -Ei "cgo|libobjc|libSystem|libc\\+\\+" | sort -u >> "$OUT" || true
 
 echo "" >> "$OUT"
 echo "## Sensitive Packages / APIs (string indicators only)" >> "$OUT"
@@ -122,24 +122,24 @@ echo "" >> "$OUT"
 echo "These are string indicators and are not proof of execution." >> "$OUT"
 echo "" >> "$OUT"
 
-strings "$BIN" | \
+(strings "$BIN" 2>/dev/null || true) | \
 grep -Ei "os/exec|syscall|unsafe|plugin|runtime/debug|reflect|net/http|crypto/tls|crypto/x509|posix_spawn|dlopen|dlsym|AuthorizationExecuteWithPrivileges|launchctl|osascript|NSTask" \
 | sort -u >> "$OUT" || true
 
 echo "" >> "$OUT"
 echo "## Network Packages" >> "$OUT"
 
-strings "$BIN" | grep -Ei "net/http|net|tls|http2|x509|proxy|dns|udp|tcp" | sort -u >> "$OUT" || true
+(strings "$BIN" 2>/dev/null || true) | grep -Ei "net/http|net|tls|http2|x509|proxy|dns|udp|tcp" | sort -u >> "$OUT" || true
 
 echo "" >> "$OUT"
 echo "## URLs" >> "$OUT"
 
-strings "$BIN" | grep -Eo 'https?://[^"'"'"' <>]+' | sort -u >> "$OUT" || true
+(strings "$BIN" 2>/dev/null || true) | grep -Eo 'https?://[^"'"'"' <>]+' | sort -u >> "$OUT" || true
 
 echo "" >> "$OUT"
 echo "## Apple APIs" >> "$OUT"
 
-strings "$BIN" | grep -Ei "CGDisplay|IOHID|NSApplication|NSUserDefaults|NSPasteboard|Accessibility|AXUIElement|TCC|ScreenCapture" | sort -u >> "$OUT" || true
+(strings "$BIN" 2>/dev/null || true) | grep -Ei "CGDisplay|IOHID|NSApplication|NSUserDefaults|NSPasteboard|Accessibility|AXUIElement|TCC|ScreenCapture" | sort -u >> "$OUT" || true
 
 echo "" >> "$OUT"
 echo "## SHA256" >> "$OUT"
