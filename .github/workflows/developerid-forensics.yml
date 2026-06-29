@@ -1,0 +1,62 @@
+name: DeveloperID Forensics
+
+on:
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Find ZIP
+        run: |
+          set -euo pipefail
+          ZIP=$(find . -maxdepth 2 -name "*.zip" | head -n 1)
+          if [ -z "$ZIP" ]; then
+            echo "No .zip file found" >&2
+            exit 1
+          fi
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          echo "ZIP=$ZIP"
+
+      - name: Unzip
+        run: |
+          set -euo pipefail
+          rm -rf extracted
+          mkdir -p extracted
+          unzip -q "$ZIP" -d extracted
+
+      - name: Find APP
+        run: |
+          set -euo pipefail
+          APP=$(find extracted -name "*.app" -type d | head -n 1)
+          if [ -z "$APP" ]; then
+            echo "No .app bundle found after unzip" >&2
+            exit 1
+          fi
+          echo "APP=$APP" >> "$GITHUB_ENV"
+          echo "APP=$APP"
+
+      - name: Run Analyzer
+        run: ./scripts/analyze.sh
+
+      - name: Build Report
+        run: ./scripts/report.sh
+
+      - name: Build HTML
+        run: ./scripts/html_report.sh
+
+      - name: Build Apple Report
+        run: ./scripts/apple_report.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: developerid-report
+          path: |
+            reports/
+            extracted/**/*.app/Contents/Info.plist
