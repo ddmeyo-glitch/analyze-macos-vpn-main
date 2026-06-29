@@ -20,7 +20,8 @@ cat >> "$OUT" <<'EOF'
 
 This report treats linked/imported symbols as stronger evidence than raw string matches.
 Raw strings from Go runtime, bundled libraries, or diagnostic messages are recorded separately
-and are not treated as proof that a dangerous API is called.
+and are not treated as proof that a dangerous API is called. Linked/imported symbols are
+reported for manual review, but are not standalone proof that the code path is executed.
 
 EOF
 
@@ -41,7 +42,7 @@ section() {
 CONFIRMED_COUNT=0
 rm -f "$REPORT_DIR/.confirmed_dangerous_count.tmp"
 
-section "Confirmed Dangerous API References"
+section "Sensitive Imported Symbols Requiring Manual Review"
 
 find "$APP" -type f | while IFS= read -r BIN
 do
@@ -72,7 +73,7 @@ else
 fi
 
 if [ "$CONFIRMED_COUNT" -eq 0 ]; then
-    echo "No linked/imported dangerous API references were confirmed." >> "$OUT"
+    echo "No sensitive linked/imported API symbol references were found." >> "$OUT"
 fi
 
 section "String-only Indicators Excluded From Risk"
@@ -88,7 +89,7 @@ find "$APP" -type f | while IFS= read -r BIN
 do
     is_macho "$BIN" || continue
 
-    RESULT=$(strings "$BIN" 2>/dev/null | grep -E "$STRING_ONLY_PATTERN" | sort -u | head -n 80 || true)
+    RESULT=$(strings "$BIN" 2>/dev/null | grep -Eo "$STRING_ONLY_PATTERN" | sort -u | head -n 80 || true)
 
     if [ -n "$RESULT" ]; then
         echo "### $BIN" >> "$OUT"
@@ -160,7 +161,7 @@ done | sort -u >> "$OUT"
 echo "" >> "$OUT"
 echo "# Summary" >> "$OUT"
 echo "" >> "$OUT"
-echo "- Confirmed dangerous API reference groups: $CONFIRMED_COUNT" >> "$OUT"
+echo "- Sensitive imported symbol groups requiring manual review: $CONFIRMED_COUNT" >> "$OUT"
 echo "- Raw string matches are documented separately and excluded from the risk score." >> "$OUT"
 echo "- com.apple.security.app-sandbox=false should be reviewed in context; it is common for some NetworkExtension/system-extension architectures and is not standalone malware evidence." >> "$OUT"
 echo "" >> "$OUT"

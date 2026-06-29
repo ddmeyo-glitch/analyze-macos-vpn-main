@@ -76,15 +76,15 @@ section "Dangerous APIs"
 
 CONFIRMED_DANGEROUS=0
 if [ -f "$REPORT_DIR/Security.md" ]; then
-    CONFIRMED_DANGEROUS=$( (grep -E "Confirmed dangerous API reference groups:" "$REPORT_DIR/Security.md" || true) | awk -F: '{gsub(/ /,"",$2); print $2}' | tail -n 1 )
+    CONFIRMED_DANGEROUS=$( (grep -E "Sensitive imported symbol groups requiring manual review:" "$REPORT_DIR/Security.md" || grep -E "Confirmed dangerous API reference groups:" "$REPORT_DIR/Security.md" || true) | awk -F: '{gsub(/ /,"",$2); print $2}' | tail -n 1 )
     CONFIRMED_DANGEROUS="${CONFIRMED_DANGEROUS:-0}"
 fi
 
 if [ "$CONFIRMED_DANGEROUS" = "0" ]; then
-    status_ok "No linked/imported dangerous API references confirmed"
+    status_ok "No sensitive linked/imported API symbol references found"
     status_ok "Go runtime and bundled-library string matches are excluded from risk scoring"
 else
-    status_warn "$CONFIRMED_DANGEROUS linked/imported dangerous API reference group(s) require manual review"
+    status_warn "$CONFIRMED_DANGEROUS sensitive linked/imported API symbol group(s) require manual review"
 fi
 
 section "Go Modules"
@@ -160,7 +160,7 @@ The following observations were made:
 
 - Code signing, notarization, Mach-O metadata, NetworkExtension usage, Go runtime data, and IOC indicators were reviewed.
 - No automatically confirmed malicious behavior was identified by this static analysis workflow.
-- No linked/imported dangerous API references were confirmed by the symbol-based security scan when the count is zero.
+- Sensitive linked/imported API symbols are reported for manual review and are not standalone proof that the code path is executed.
 - Raw string matches from Go runtime, bundled libraries, or diagnostic messages are documented separately and are not treated as proof of API execution.
 - The app uses a Packet Tunnel System Extension and libopenconnect indicators, which can be consistent with a VPN client architecture.
 - Further investigation may require Apple's internal detection details, such as the triggering executable hash, signature rule, or file path.

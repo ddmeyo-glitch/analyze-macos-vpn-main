@@ -21,7 +21,7 @@ echo
 echo "- Static analysis completed."
 echo "- No automatically confirmed malicious behaviour was identified."
 echo "- The symbol-based security scan did not treat Go runtime or bundled-library string matches as proof of dangerous API execution."
-echo "- If the confirmed dangerous API reference count is zero in Security.md, no linked/imported dangerous API call was confirmed by this workflow."
+echo "- Sensitive linked/imported API symbols, if present in Security.md, are reported for manual review and are not standalone proof that the code path is executed."
 echo "- The observed architecture is consistent with a VPN client using Fyne, Packet Tunnel System Extension, and libopenconnect indicators."
 } > "$OUT"
 cat > "$RESP" <<'EOF'
