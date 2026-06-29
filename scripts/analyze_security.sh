@@ -5,231 +5,170 @@ REPORT_DIR="${REPORT_DIR:-reports}"
 mkdir -p "$REPORT_DIR"
 
 OUT="$REPORT_DIR/Security.md"
-
 APP="${APP:-$(find . -name "*.app" -type d | head -n 1)}"
+
+DANGEROUS_SYMBOL_PATTERN='(^|[^A-Za-z0-9_])_(AuthorizationExecuteWithPrivileges|SMJobBless|ptrace|task_for_pid|setuid|seteuid|setgid|system|fork|exec|execve|posix_spawn|NSTask|NSAppleScript|launchctl)([^A-Za-z0-9_]|$)'
+STRING_ONLY_PATTERN='AuthorizationExecuteWithPrivileges|SMJobBless|ptrace|task_for_pid|setuid|seteuid|setgid|system|fork|exec|execve|posix_spawn|NSTask|NSAppleScript|launchctl'
 
 echo "# Security Analysis" > "$OUT"
 echo "" >> "$OUT"
 echo "Generated: $(date)" >> "$OUT"
 echo "" >> "$OUT"
 
-########################################
-# Helper
-########################################
+cat >> "$OUT" <<'EOF'
+## Method
 
-scan_pattern() {
+This report treats linked/imported symbols as stronger evidence than raw string matches.
+Raw strings from Go runtime, bundled libraries, or diagnostic messages are recorded separately
+and are not treated as proof that a dangerous API is called.
 
-TITLE="$1"
-PATTERN="$2"
+EOF
 
-echo "" >> "$OUT"
-echo "## $TITLE" >> "$OUT"
-echo "" >> "$OUT"
+is_macho() {
+    file "$1" | grep -q "Mach-O"
+}
 
-FOUND=0
+is_go_binary() {
+    strings "$1" 2>/dev/null | grep -q "Go build"
+}
+
+section() {
+    echo "" >> "$OUT"
+    echo "## $1" >> "$OUT"
+    echo "" >> "$OUT"
+}
+
+CONFIRMED_COUNT=0
+rm -f "$REPORT_DIR/.confirmed_dangerous_count.tmp"
+
+section "Confirmed Dangerous API References"
 
 find "$APP" -type f | while IFS= read -r BIN
 do
-    if file "$BIN" | grep -q "Mach-O"; then
+    is_macho "$BIN" || continue
 
-        RESULT=$(strings "$BIN" | grep -E "$PATTERN" || true)
+    RESULT=$(
+        {
+            nm -m "$BIN" 2>/dev/null || true
+            otool -Iv "$BIN" 2>/dev/null || true
+        } | grep -E "$DANGEROUS_SYMBOL_PATTERN" || true
+    )
 
-        if [ -n "$RESULT" ]; then
-
-            FOUND=1
-
-            echo "### $BIN" >> "$OUT"
-            echo '```' >> "$OUT"
-            echo "$RESULT" >> "$OUT"
-            echo '```' >> "$OUT"
-            echo "" >> "$OUT"
-
-        fi
-
+    if [ -n "$RESULT" ]; then
+        echo "### $BIN" >> "$OUT"
+        echo '```' >> "$OUT"
+        echo "$RESULT" | sort -u >> "$OUT"
+        echo '```' >> "$OUT"
+        echo "" >> "$OUT"
+        printf '1\n' >> "$REPORT_DIR/.confirmed_dangerous_count.tmp"
     fi
 done
 
-}
+if [ -f "$REPORT_DIR/.confirmed_dangerous_count.tmp" ]; then
+    CONFIRMED_COUNT=$(wc -l < "$REPORT_DIR/.confirmed_dangerous_count.tmp" | tr -d ' ')
+    rm -f "$REPORT_DIR/.confirmed_dangerous_count.tmp"
+else
+    CONFIRMED_COUNT=0
+fi
 
-########################################
-# Privilege Escalation
-########################################
+if [ "$CONFIRMED_COUNT" -eq 0 ]; then
+    echo "No linked/imported dangerous API references were confirmed." >> "$OUT"
+fi
 
-scan_pattern \
-"Privilege Escalation" \
-"AuthorizationExecuteWithPrivileges|SMJobBless|setuid|seteuid|setgid|task_for_pid|ptrace"
+section "String-only Indicators Excluded From Risk"
 
-########################################
-# Process Execution
-########################################
+cat >> "$OUT" <<'EOF'
+The following items are raw string matches. They may come from Go runtime symbol names,
+bundled third-party libraries, error messages, or documentation strings. They are not counted
+as confirmed API calls in this report.
 
-scan_pattern \
-"Process Execution" \
-"system|fork|exec|execve|posix_spawn|NSTask"
-
-########################################
-# Dynamic Loading
-########################################
-
-scan_pattern \
-"Dynamic Loading" \
-"dlopen|dlsym|NSBundle"
-
-########################################
-# Shell
-########################################
-
-scan_pattern \
-"Shell Commands" \
-"/bin/sh|/bin/bash|/bin/zsh|osascript|python|perl|ruby"
-
-########################################
-# Launch Services
-########################################
-
-scan_pattern \
-"Launch Services" \
-"launchctl|LaunchDaemon|LaunchAgent|SMAppService|SMLoginItem"
-
-########################################
-# Network APIs
-########################################
-
-scan_pattern \
-"Network APIs" \
-"NSURLSession|CFNetwork|Network.framework|socket|connect|bind|listen|recv|send"
-
-########################################
-# Apple Sensitive APIs
-########################################
-
-scan_pattern \
-"Apple Sensitive APIs" \
-"CGDisplay|IOHID|AXUIElement|Accessibility|ScreenCapture|ScreenRecording|TCC"
-
-########################################
-# VPN APIs
-########################################
-
-scan_pattern \
-"VPN APIs" \
-"PacketTunnel|NEPacketTunnelProvider|NETunnelProvider|NetworkExtension|TunnelProvider"
-
-########################################
-# OpenConnect
-########################################
-
-scan_pattern \
-"OpenConnect" \
-"openconnect|libopenconnect|DTLS|ESP|CSTP|AnyConnect|ocserv|gpst"
-
-########################################
-# Encryption
-########################################
-
-scan_pattern \
-"Crypto" \
-"AES|RSA|ECDSA|SHA256|SHA512|crypto|TLS|SSL"
-
-########################################
-# Obfuscation
-########################################
-
-scan_pattern \
-"Possible Obfuscation" \
-"base64|xor|shellcode|payload|decrypt|encrypt"
-
-########################################
-# URLs
-########################################
-
-echo "" >> "$OUT"
-echo "## URLs" >> "$OUT"
+EOF
 
 find "$APP" -type f | while IFS= read -r BIN
 do
-    if file "$BIN" | grep -q Mach-O
-    then
-        strings "$BIN"
+    is_macho "$BIN" || continue
+
+    RESULT=$(strings "$BIN" 2>/dev/null | grep -E "$STRING_ONLY_PATTERN" | sort -u | head -n 80 || true)
+
+    if [ -n "$RESULT" ]; then
+        echo "### $BIN" >> "$OUT"
+        if is_go_binary "$BIN"; then
+            echo "Note: Go binary detected; Go runtime/package symbols are expected to appear as strings." >> "$OUT"
+        fi
+        echo '```' >> "$OUT"
+        echo "$RESULT" >> "$OUT"
+        echo '```' >> "$OUT"
+        echo "" >> "$OUT"
     fi
-done | \
-grep -Eo "https?://[^ ]+" | \
-sort -u >> "$OUT" || true
+done
 
-########################################
-# Domains
-########################################
+section "Sandbox Entitlements"
 
-echo "" >> "$OUT"
-echo "## Domains" >> "$OUT"
+find "$APP" \( -name "*.app" -o -name "*.systemextension" \) -type d | while IFS= read -r TARGET
+do
+    ENT=$(codesign -d --entitlements :- "$TARGET" 2>/dev/null || true)
+    [ -n "$ENT" ] || continue
+
+    echo "### $TARGET" >> "$OUT"
+    echo '```xml' >> "$OUT"
+    echo "$ENT" | grep -E "com.apple.security.app-sandbox|com.apple.developer.networking.networkextension|com.apple.developer.system-extension.install|com.apple.security.application-groups" -A2 -B1 || true
+    echo '```' >> "$OUT"
+    echo "" >> "$OUT"
+done
+
+section "VPN and NetworkExtension Indicators"
 
 find "$APP" -type f | while IFS= read -r BIN
 do
-    if file "$BIN" | grep -q Mach-O
-    then
-        strings "$BIN"
+    is_macho "$BIN" || continue
+
+    RESULT=$(strings "$BIN" 2>/dev/null | grep -Ei "PacketTunnel|NEPacketTunnelProvider|NETunnelProvider|NetworkExtension|TunnelProvider|openconnect|libopenconnect|DTLS|ESP|CSTP|AnyConnect|ocserv|gpst" | sort -u | head -n 200 || true)
+
+    if [ -n "$RESULT" ]; then
+        echo "### $BIN" >> "$OUT"
+        echo '```' >> "$OUT"
+        echo "$RESULT" >> "$OUT"
+        echo '```' >> "$OUT"
+        echo "" >> "$OUT"
     fi
-done | \
-grep -Eo "[A-Za-z0-9.-]+\.[A-Za-z]{2,}" | \
-sort -u | \
-uniq >> "$OUT" || true
+done
 
-########################################
-# IPv4
-########################################
-
-echo "" >> "$OUT"
-echo "## IPv4" >> "$OUT"
+section "URLs"
 
 find "$APP" -type f | while IFS= read -r BIN
 do
-    if file "$BIN" | grep -q Mach-O
-    then
-        strings "$BIN"
-    fi
-done | \
-grep -Eo "([0-9]{1,3}\.){3}[0-9]{1,3}" | \
-sort -u >> "$OUT" || true
+    is_macho "$BIN" || continue
+    strings "$BIN" 2>/dev/null | grep -Eo 'https?://[^"'"'"' <>]+' || true
+done | sort -u >> "$OUT"
 
-########################################
-# Summary
-########################################
+section "Domains"
+
+find "$APP" -type f | while IFS= read -r BIN
+do
+    is_macho "$BIN" || continue
+    strings "$BIN" 2>/dev/null | grep -Eo '([A-Za-z0-9-]+\.)+[A-Za-z]{2,}' || true
+done | sort -u >> "$OUT"
+
+section "IPv4"
+
+find "$APP" -type f | while IFS= read -r BIN
+do
+    is_macho "$BIN" || continue
+    strings "$BIN" 2>/dev/null | grep -Eo '([0-9]{1,3}\.){3}[0-9]{1,3}' || true
+done | sort -u >> "$OUT"
 
 echo "" >> "$OUT"
 echo "# Summary" >> "$OUT"
-
-COUNT=0
-
-for WORD in \
-AuthorizationExecuteWithPrivileges \
-SMJobBless \
-ptrace \
-task_for_pid \
-system \
-fork \
-exec \
-NSTask \
-launchctl
-do
-
-N=$( (grep -R "$WORD" "$OUT" 2>/dev/null || true) | wc -l | tr -d ' ' )
-
-echo "- $WORD : $N" >> "$OUT"
-
-COUNT=$((COUNT+N))
-
-done
-
+echo "" >> "$OUT"
+echo "- Confirmed dangerous API reference groups: $CONFIRMED_COUNT" >> "$OUT"
+echo "- Raw string matches are documented separately and excluded from the risk score." >> "$OUT"
+echo "- com.apple.security.app-sandbox=false should be reviewed in context; it is common for some NetworkExtension/system-extension architectures and is not standalone malware evidence." >> "$OUT"
 echo "" >> "$OUT"
 
-if [ "$COUNT" -eq 0 ]
-then
+if [ "$CONFIRMED_COUNT" -eq 0 ]; then
     echo "**Risk : LOW**" >> "$OUT"
-elif [ "$COUNT" -lt 5 ]
-then
-    echo "**Risk : MEDIUM**" >> "$OUT"
 else
-    echo "**Risk : HIGH**" >> "$OUT"
+    echo "**Risk : REVIEW**" >> "$OUT"
 fi
 
 echo "" >> "$OUT"

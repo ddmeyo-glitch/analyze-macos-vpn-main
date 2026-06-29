@@ -74,36 +74,17 @@ fi
 
 section "Dangerous APIs"
 
-FOUND=0
-SCAN_REPORTS=()
-for f in Security.md MachO.md NetworkExtension.md Go.md; do
-    if [ -f "$REPORT_DIR/$f" ]; then
-        SCAN_REPORTS+=("$REPORT_DIR/$f")
-    fi
-done
+CONFIRMED_DANGEROUS=0
+if [ -f "$REPORT_DIR/Security.md" ]; then
+    CONFIRMED_DANGEROUS=$( (grep -E "Confirmed dangerous API reference groups:" "$REPORT_DIR/Security.md" || true) | awk -F: '{gsub(/ /,"",$2); print $2}' | tail -n 1 )
+    CONFIRMED_DANGEROUS="${CONFIRMED_DANGEROUS:-0}"
+fi
 
-for WORD in \
-NSTask \
-system \
-fork \
-exec \
-posix_spawn \
-NSAppleScript \
-SMJobBless \
-AuthorizationExecuteWithPrivileges \
-ptrace \
-task_for_pid \
-launchctl
-do
-    if [ "${#SCAN_REPORTS[@]}" -gt 0 ] && grep -iq "$WORD" "${SCAN_REPORTS[@]}" 2>/dev/null
-    then
-        status_warn "$WORD detected"
-        FOUND=1
-    fi
-done
-
-if [ "$FOUND" -eq 0 ]; then
-    status_ok "No dangerous APIs detected"
+if [ "$CONFIRMED_DANGEROUS" = "0" ]; then
+    status_ok "No linked/imported dangerous API references confirmed"
+    status_ok "Go runtime and bundled-library string matches are excluded from risk scoring"
+else
+    status_warn "$CONFIRMED_DANGEROUS linked/imported dangerous API reference group(s) require manual review"
 fi
 
 section "Go Modules"
@@ -136,14 +117,9 @@ section "Risk Assessment"
 
 RISK="LOW"
 
-if [ "${#SCAN_REPORTS[@]}" -gt 0 ] && grep -iq "SMJobBless" "${SCAN_REPORTS[@]}" 2>/dev/null
+if [ "$CONFIRMED_DANGEROUS" != "0" ]
 then
-    RISK="MEDIUM"
-fi
-
-if [ "${#SCAN_REPORTS[@]}" -gt 0 ] && grep -iq "AuthorizationExecuteWithPrivileges" "${SCAN_REPORTS[@]}" 2>/dev/null
-then
-    RISK="HIGH"
+    RISK="REVIEW"
 fi
 
 echo "" >> "$OUT"
@@ -184,7 +160,9 @@ The following observations were made:
 
 - Code signing, notarization, Mach-O metadata, NetworkExtension usage, Go runtime data, and IOC indicators were reviewed.
 - No automatically confirmed malicious behavior was identified by this static analysis workflow.
-- Detected privileged, process-execution, or networking APIs should be reviewed in context if present in the supporting reports.
+- No linked/imported dangerous API references were confirmed by the symbol-based security scan when the count is zero.
+- Raw string matches from Go runtime, bundled libraries, or diagnostic messages are documented separately and are not treated as proof of API execution.
+- The app uses a Packet Tunnel System Extension and libopenconnect indicators, which can be consistent with a VPN client architecture.
 - Further investigation may require Apple's internal detection details, such as the triggering executable hash, signature rule, or file path.
 EOF
 

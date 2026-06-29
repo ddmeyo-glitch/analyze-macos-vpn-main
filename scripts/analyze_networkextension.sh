@@ -149,6 +149,56 @@ swift-demangle 2>/dev/null | \
 grep "Swift" >> "$OUT" || true
 
 #########################################################################
+# Detailed VPNGUITunnel Binary Analysis
+#########################################################################
+
+echo "" >> "$OUT"
+echo "## Detailed Symbols (nm -m)" >> "$OUT"
+
+nm -m "$BIN" >> "$OUT" 2>&1 || true
+
+echo "" >> "$OUT"
+echo "## External Symbols (nm -g)" >> "$OUT"
+
+nm -g "$BIN" >> "$OUT" 2>&1 || true
+
+echo "" >> "$OUT"
+echo "## Indirect Symbols (otool -Iv)" >> "$OUT"
+
+otool -Iv "$BIN" >> "$OUT" 2>&1 || true
+
+echo "" >> "$OUT"
+echo "## Disassembly Preview (otool -tvV)" >> "$OUT"
+
+otool -tvV "$BIN" 2>&1 | head -n 4000 >> "$OUT" || true
+
+echo "" >> "$OUT"
+echo "## Objdump Headers" >> "$OUT"
+
+if command -v llvm-objdump >/dev/null 2>&1; then
+    llvm-objdump --macho --private-headers "$BIN" >> "$OUT" 2>&1 || true
+elif command -v xcrun >/dev/null 2>&1; then
+    xcrun llvm-objdump --macho --private-headers "$BIN" >> "$OUT" 2>&1 || true
+elif command -v objdump >/dev/null 2>&1; then
+    objdump -x "$BIN" >> "$OUT" 2>&1 || true
+else
+    echo "objdump-compatible command not available." >> "$OUT"
+fi
+
+echo "" >> "$OUT"
+echo "## Objdump Symbols" >> "$OUT"
+
+if command -v llvm-objdump >/dev/null 2>&1; then
+    llvm-objdump --macho --syms "$BIN" >> "$OUT" 2>&1 || true
+elif command -v xcrun >/dev/null 2>&1; then
+    xcrun llvm-objdump --macho --syms "$BIN" >> "$OUT" 2>&1 || true
+elif command -v objdump >/dev/null 2>&1; then
+    objdump -t "$BIN" >> "$OUT" 2>&1 || true
+else
+    echo "objdump-compatible command not available." >> "$OUT"
+fi
+
+#########################################################################
 # PacketTunnel
 #########################################################################
 

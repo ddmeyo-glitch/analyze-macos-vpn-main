@@ -1,3 +1,5 @@
 extracted/
 reports/
 artifact-review/
+artifact-review-*/
+fixnotes-*.txt

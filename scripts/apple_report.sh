@@ -20,7 +20,9 @@ echo "## Conclusion"
 echo
 echo "- Static analysis completed."
 echo "- No automatically confirmed malicious behaviour was identified."
-echo "- Any detected privileged APIs should be manually reviewed in context."
+echo "- The symbol-based security scan did not treat Go runtime or bundled-library string matches as proof of dangerous API execution."
+echo "- If the confirmed dangerous API reference count is zero in Security.md, no linked/imported dangerous API call was confirmed by this workflow."
+echo "- The observed architecture is consistent with a VPN client using Fyne, Packet Tunnel System Extension, and libopenconnect indicators."
 } > "$OUT"
 cat > "$RESP" <<'EOF'
 Dear Apple Security Team,
@@ -35,7 +37,7 @@ The review included:
 - IOC extraction
 - Security API review
 
-Based on the current analysis, we did not identify intentionally malicious functionality. If you can provide additional indicators (hash, file path, signature, or detection details), we will investigate them immediately and remediate any confirmed issue.
+Based on the current analysis, we did not identify intentionally malicious functionality. Raw string matches from Go runtime or bundled libraries were not treated as proof of dangerous API execution. If you can provide additional indicators (hash, file path, signature, or detection details), we will investigate them immediately and remediate any confirmed issue.
 
 Attached are the technical assessment report and supporting evidence.
 
